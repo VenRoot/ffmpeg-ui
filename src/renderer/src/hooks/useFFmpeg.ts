@@ -14,6 +14,7 @@ const api = window.ffmpegAPI
 export function useFFmpeg() {
   const [ffmpegVersion, setFfmpegVersion] = useState<string | null>(null)
   const [ffmpegAvailable, setFfmpegAvailable] = useState(true)
+  const [ytdlpAvailable, setYtdlpAvailable] = useState(false)
   const [loading, setLoading] = useState(true)
 
   const [videoEncoders, setVideoEncoders] = useState<Encoder[]>([])
@@ -33,17 +34,19 @@ export function useFFmpeg() {
 
     async function load() {
       try {
-        const [version, encoders, fmts, accels] = await Promise.all([
+        const [version, encoders, fmts, accels, ytdlp] = await Promise.all([
           api.getVersion(),
           api.getEncoders(),
           api.getFormats(),
-          api.getHwAccels()
+          api.getHwAccels(),
+          api.checkYtdlp()
         ])
 
         if (cancelled) return
 
         setFfmpegVersion(version)
         setFfmpegAvailable(true)
+        setYtdlpAvailable(ytdlp)
         setVideoEncoders(encoders.filter((e) => e.type === 'video'))
         setAudioEncoders(encoders.filter((e) => e.type === 'audio'))
         setFormats(fmts.filter((f) => f.canMux))
@@ -125,6 +128,7 @@ export function useFFmpeg() {
     // FFmpeg availability
     ffmpegVersion,
     ffmpegAvailable,
+    ytdlpAvailable,
     loading,
     // Codec / format lists
     videoEncoders,

@@ -8,7 +8,7 @@ import {
   ClipboardCopy,
   Sparkles
 } from 'lucide-react'
-import type { AppSettings, TabId, FFprobeOutput, Preset } from './types'
+import type { AppSettings, TabId, FFprobeOutput, Preset, YtdlpInfo } from './types'
 import { useFFmpeg } from './hooks/useFFmpeg'
 import FileSection from './components/FileSection'
 import VideoSection from './components/VideoSection'
@@ -20,6 +20,7 @@ import LogViewer from './components/LogViewer'
 import MediaInfoPanel from './components/MediaInfoPanel'
 
 const api = window.ffmpegAPI
+const YTDLP_URL_PATTERN = /youtube|youtu\.be|twitch|tiktok|instagram|twitter|x\.com|vimeo|dailymotion|reddit/i
 
 // ─── Presets ─────────────────────────────────────────────────────────────────
 
@@ -111,14 +112,18 @@ const DEFAULT_SETTINGS: AppSettings = {
   threads: 0,
   extraInputArgs: '',
   extraOutputArgs: '',
+  inputMode: 'file',
+  inputUrl: '',
+  ytdlpFormat: 'bestvideo+bestaudio/best',
   activeTab: 'files',
   showLog: false
 }
 
 // ─── Command builder ──────────────────────────────────────────────────────────
 
-export function buildFFmpegArgs(s: AppSettings): string[] {
-  if (!s.inputFile || !s.outputFile) return []
+export function buildFFmpegArgs(s: AppSettings, streamUrls: string[] = []): string[] {
+  const hasInput = s.inputMode === 'url' ? !!s.inputUrl : !!s.inputFile
+  if (!hasInput || !s.outputFile) return []
   const args: string[] = []
 
   // Hardware acceleration
@@ -134,7 +139,14 @@ export function buildFFmpegArgs(s: AppSettings): string[] {
 
   // Seek (fast = before -i, accurate = after -i)
   if (s.seekFast && s.startTime) args.push('-ss', s.startTime)
-  args.push('-i', s.inputFile)
+  if (s.inputMode === 'url') {
+    const inputs = streamUrls.length > 0 ? streamUrls : [s.inputUrl]
+    for (const u of inputs) args.push('-i', u)
+    // When yt-dlp splits video+audio into two streams, map them explicitly
+    if (inputs.length >= 2) args.push('-map', '0:v:0', '-map', '1:a:0')
+  } else {
+    args.push('-i', s.inputFile)
+  }
   if (!s.seekFast && s.startTime) args.push('-ss', s.startTime)
   if (s.endTime) args.push('-to', s.endTime)
 
@@ -214,6 +226,7 @@ export default function App() {
   const {
     ffmpegVersion, ffmpegAvailable, loading,
     videoEncoders, audioEncoders, formats, hwAccels,
+    ytdlpAvailable,
     conversionState, logs,
     startConversion, cancelConversion, resetConversion, clearLogs
   } = useFFmpeg()
@@ -223,13 +236,36 @@ export default function App() {
   const [probing, setProbing] = useState(false)
   const [showPresets, setShowPresets] = useState(false)
   const [cmdCopied, setCmdCopied] = useState(false)
+  const [ytdlpInfo, setYtdlpInfo] = useState<YtdlpInfo | null>(null)
+  const [resolvedStreamUrls, setResolvedStreamUrls] = useState<string[]>([])
+  const [urlResolving, setUrlResolving] = useState(false)
+  const [urlError, setUrlError] = useState<string | null>(null)
 
   const update = useCallback((partial: Partial<AppSettings>) => {
     setSettings((prev) => ({ ...prev, ...partial }))
   }, [])
 
-  // Auto-suggest output filename when input changes
   useEffect(() => {
+    const acceptFileDrop = (event: DragEvent) => {
+      if (!event.dataTransfer) return
+      event.preventDefault()
+      event.dataTransfer.dropEffect = 'copy'
+    }
+
+    window.addEventListener('dragenter', acceptFileDrop)
+    window.addEventListener('dragover', acceptFileDrop)
+    window.addEventListener('drop', acceptFileDrop)
+
+    return () => {
+      window.removeEventListener('dragenter', acceptFileDrop)
+      window.removeEventListener('dragover', acceptFileDrop)
+      window.removeEventListener('drop', acceptFileDrop)
+    }
+  }, [])
+
+  // Auto-suggest output filename and probe when input file changes
+  useEffect(() => {
+    if (settings.inputMode !== 'file') return
     if (!settings.inputFile) { setMediaInfo(null); return }
     const base = settings.inputFile.replace(/\.[^.]+$/, '')
     const ext  = settings.outputFormat || 'mp4'
@@ -242,7 +278,7 @@ export default function App() {
       .then(setMediaInfo)
       .catch(() => setMediaInfo(null))
       .finally(() => setProbing(false))
-  }, [settings.inputFile])
+  }, [settings.inputFile, settings.inputMode])
 
   // Update output extension when format changes
   useEffect(() => {
@@ -252,18 +288,44 @@ export default function App() {
     }
   }, [settings.outputFormat])
 
-  const ffmpegArgs = useMemo(() => buildFFmpegArgs(settings), [settings])
+  // Clear cached stream URLs whenever the source URL or quality format changes
+  useEffect(() => {
+    setResolvedStreamUrls([])
+    setUrlError(null)
+  }, [settings.inputUrl, settings.ytdlpFormat])
+
+  const ffmpegArgs = useMemo(() => buildFFmpegArgs(settings, resolvedStreamUrls), [settings, resolvedStreamUrls])
   const command    = useMemo(() => ['ffmpeg', ...ffmpegArgs].join(' '), [ffmpegArgs])
-  const canConvert = !!settings.inputFile && !!settings.outputFile && ffmpegAvailable && conversionState.status !== 'running'
+  const needsYtdlp = settings.inputMode === 'url' && YTDLP_URL_PATTERN.test(settings.inputUrl)
+  const canConvert = (settings.inputMode === 'url' ? !!settings.inputUrl : !!settings.inputFile) &&
+    !!settings.outputFile && ffmpegAvailable && conversionState.status !== 'running' && !urlResolving &&
+    !(needsYtdlp && !ytdlpAvailable)
 
   const applyPreset = useCallback((preset: Preset) => {
     setSettings((prev) => ({ ...prev, ...preset.settings }))
     setShowPresets(false)
   }, [])
 
-  const handleStart = useCallback(() => {
+  const handleStart = useCallback(async () => {
+    setUrlError(null)
+    // For social-media URLs, resolve the stream URL(s) via yt-dlp first
+    if (settings.inputMode === 'url' && settings.inputUrl && resolvedStreamUrls.length === 0) {
+      if (needsYtdlp) {
+        setUrlResolving(true)
+        try {
+          const urls = await api.getStreamUrls(settings.inputUrl, settings.ytdlpFormat)
+          setResolvedStreamUrls(urls)
+          startConversion(buildFFmpegArgs(settings, urls))
+        } catch (e: unknown) {
+          setUrlError(e instanceof Error ? e.message : 'Failed to resolve web video URL')
+        } finally {
+          setUrlResolving(false)
+        }
+        return
+      }
+    }
     startConversion(ffmpegArgs)
-  }, [ffmpegArgs, startConversion])
+  }, [ffmpegArgs, settings, resolvedStreamUrls, needsYtdlp, startConversion])
 
   const copyCommand = useCallback(async () => {
     await navigator.clipboard.writeText(command)
@@ -356,9 +418,26 @@ export default function App() {
               inputFile={settings.inputFile}
               outputFile={settings.outputFile}
               outputFormat={settings.outputFormat}
+              inputMode={settings.inputMode}
+              inputUrl={settings.inputUrl}
+              ytdlpFormat={settings.ytdlpFormat}
               formats={formats}
+              ytdlpAvailable={ytdlpAvailable}
+              ytdlpInfo={ytdlpInfo}
               onChange={update}
+              onYtdlpInfo={setYtdlpInfo}
             />
+            {urlResolving && (
+              <div className="flex items-center gap-2 text-zinc-500 text-xs pl-1">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Resolving web video streams...
+              </div>
+            )}
+            {urlError && (
+              <div className="flex items-start gap-2 text-xs text-red-400 bg-red-950/20 border border-red-800/30 rounded-lg p-2.5">
+                <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                <pre className="whitespace-pre-wrap break-all font-mono">{urlError}</pre>
+              </div>
+            )}
             {probing && (
               <div className="flex items-center gap-2 text-zinc-500 text-xs pl-1">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" /> Probing file…

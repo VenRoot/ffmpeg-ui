@@ -19,6 +19,7 @@ A modern, feature-rich FFmpeg GUI wrapper built with **Electron + Vite + React +
 ## Requirements
 
 - **ffmpeg** + **ffprobe** in your `PATH`
+- **yt-dlp** for YouTube and social-media URLs; direct HTTP, HTTPS, and HLS links work without it
 - Node.js >= 18 for development
 
 ## Install On Arch Linux
@@ -43,7 +44,7 @@ cd ffmpeg-ui
 makepkg -si
 ```
 
-The AUR package uses Arch's system Electron package and depends on `ffmpeg`.
+The AUR package uses Arch's system Electron package, depends on `ffmpeg`, and lists `yt-dlp` as an optional dependency for web-video extraction.
 
 ## Development
 
@@ -60,6 +61,16 @@ npm run build:linux
 ```
 
 The release files end up in the `release/` directory.
+
+## Maintainer Release
+
+After bumping `package.json`, `package-lock.json`, `PKGBUILD`, and `.SRCINFO`, commit the changes, make sure the AUR checkout is at `./ffmpeg-ui`, then run:
+
+```bash
+./scripts/release-aur.sh
+```
+
+The script tags the current commit, pushes the branch and tag to GitHub, copies `PKGBUILD` and `.SRCINFO` into `./ffmpeg-ui`, then commits and pushes the AUR update.
 
 ## License
 

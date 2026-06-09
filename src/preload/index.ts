@@ -1,10 +1,13 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 
 // ─── Exposed API ─────────────────────────────────────────────────────────────
 
 const api = {
   /** Open a native file-picker for input media */
   openFile: () => ipcRenderer.invoke('dialog:openFile'),
+
+  /** Resolve a dropped browser File object to its native filesystem path */
+  getPathForFile: (file: File): string => webUtils.getPathForFile(file),
 
   /** Open a native save-dialog for the output file */
   saveFile: (defaultPath?: string) =>
@@ -37,6 +40,18 @@ const api = {
 
   /** Send SIGTERM to the running ffmpeg process */
   cancel: (): Promise<boolean> => ipcRenderer.invoke('ffmpeg:cancel'),
+
+  // ── yt-dlp ──────────────────────────────────────────────────────────────────
+
+  /** Check whether yt-dlp is installed and in PATH */
+  checkYtdlp: (): Promise<boolean> => ipcRenderer.invoke('ytdlp:check'),
+
+  /** Return JSON metadata for the given URL via `yt-dlp -J` */
+  ytdlpInfo: (url: string) => ipcRenderer.invoke('ytdlp:info', url),
+
+  /** Return direct stream URL(s) for the given URL via `yt-dlp -g` */
+  getStreamUrls: (url: string, format: string): Promise<string[]> =>
+    ipcRenderer.invoke('ytdlp:getUrl', url, format),
 
   /** Subscribe to real-time progress events; returns a cleanup function */
   onProgress: (cb: (progress: Progress) => void) => {

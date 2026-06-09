@@ -2,7 +2,8 @@ import type {
   Progress,
   ConversionResult,
   Encoder,
-  Format
+  Format,
+  YtdlpInfo
 } from './types'
 
 // ─── Window API (exposed by preload) ─────────────────────────────────────────
@@ -11,6 +12,7 @@ declare global {
   interface Window {
     ffmpegAPI: {
       openFile: () => Promise<string | null>
+      getPathForFile: (file: File) => string
       saveFile: (defaultPath?: string) => Promise<string | null>
       openPath: (filePath: string) => Promise<string>
       showItemInFolder: (filePath: string) => void
@@ -24,6 +26,10 @@ declare global {
       onProgress: (cb: (progress: Progress) => void) => () => void
       onLog: (cb: (text: string) => void) => () => void
       onDone: (cb: (result: ConversionResult) => void) => () => void
+      // yt-dlp
+      checkYtdlp: () => Promise<boolean>
+      ytdlpInfo: (url: string) => Promise<YtdlpInfo>
+      getStreamUrls: (url: string, format: string) => Promise<string[]>
     }
   }
 }

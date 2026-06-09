@@ -51,6 +51,30 @@ export interface FFprobeOutput {
   format: FFprobeFormat
 }
 
+// ─── yt-dlp ──────────────────────────────────────────────────────────────────
+
+export interface YtdlpFormat {
+  format_id: string
+  ext: string
+  resolution?: string
+  fps?: number
+  tbr?: number
+  vcodec?: string
+  acodec?: string
+  filesize?: number
+  filesize_approx?: number
+}
+
+export interface YtdlpInfo {
+  title: string
+  duration?: number
+  webpage_url?: string
+  thumbnail?: string
+  uploader?: string
+  extractor?: string
+  formats?: YtdlpFormat[]
+}
+
 // ─── Progress / conversion state ─────────────────────────────────────────────
 
 export interface Progress {
@@ -121,6 +145,11 @@ export interface AppSettings {
   threads: number
   extraInputArgs: string
   extraOutputArgs: string
+
+  // URL / web input
+  inputMode: 'file' | 'url'
+  inputUrl: string
+  ytdlpFormat: string
 
   // UI state
   activeTab: TabId

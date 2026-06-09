@@ -315,6 +315,64 @@ ipcMain.handle('ffmpeg:cancel', () => {
   return false
 })
 
+// ─── IPC: yt-dlp ─────────────────────────────────────────────────────────────
+
+ipcMain.handle('ytdlp:check', () => {
+  return new Promise<boolean>((resolve) => {
+    const proc = spawn('yt-dlp', ['--version'])
+    proc.on('close', (code) => resolve(code === 0))
+    proc.on('error', () => resolve(false))
+  })
+})
+
+ipcMain.handle('ytdlp:info', (_, url: string) => {
+  return new Promise((resolve, reject) => {
+    // --no-playlist: treat playlist URLs as single videos
+    const proc = spawn('yt-dlp', ['-J', '--no-playlist', url])
+    let out = ''
+    let err = ''
+    proc.stdout?.on('data', (d: Buffer) => (out += d.toString()))
+    proc.stderr?.on('data', (d: Buffer) => (err += d.toString()))
+    proc.on('close', (code) => {
+      if (code === 0) {
+        try { resolve(JSON.parse(out)) }
+        catch { reject(new Error('Failed to parse yt-dlp JSON output')) }
+      } else {
+        const msg = err.split('\n').filter(Boolean).pop() ?? 'yt-dlp failed'
+        reject(new Error(msg))
+      }
+    })
+    proc.on('error', () => reject(new Error('yt-dlp not found in PATH. Install it: sudo pacman -S yt-dlp')))
+  })
+})
+
+ipcMain.handle('ytdlp:getUrl', (_, url: string, format: string) => {
+  return new Promise<string[]>((resolve, reject) => {
+    const args = ['-g', '--no-playlist']
+    if (format) args.push('--format', format)
+    args.push(url)
+    const proc = spawn('yt-dlp', args)
+    let out = ''
+    let err = ''
+    proc.stdout?.on('data', (d: Buffer) => (out += d.toString()))
+    proc.stderr?.on('data', (d: Buffer) => (err += d.toString()))
+    proc.on('close', (code) => {
+      if (code === 0) {
+        const urls = out.trim().split('\n').filter(Boolean)
+        if (urls.length === 0) {
+          reject(new Error('yt-dlp did not return any playable stream URLs'))
+          return
+        }
+        resolve(urls)
+      } else {
+        const msg = err.split('\n').filter(Boolean).pop() ?? 'yt-dlp failed to resolve URL'
+        reject(new Error(msg))
+      }
+    })
+    proc.on('error', () => reject(new Error('yt-dlp not found in PATH')))
+  })
+})
+
 // ─── Parsers ─────────────────────────────────────────────────────────────────
 
 /**

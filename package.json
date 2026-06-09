@@ -1,6 +1,6 @@
 {
   "name": "ffmpeg-ui",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A modern, feature-rich FFmpeg GUI wrapper",
   "main": "./out/main/index.js",
   "author": "ffmpeg-ui contributors",
