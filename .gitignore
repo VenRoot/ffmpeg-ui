@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# Electron/Vite build output
+out/
+dist/
+release/
+
+# Arch makepkg output
+pkg/
+/ffmpeg-ui/
+*.pkg.tar
+*.pkg.tar.*
+*.src.tar
+*.src.tar.*
+*.log
+*.log.*
+
+# Local caches
+.vite/
+.cache/
+
+# Editor/OS noise
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local environment files
+.env
+.env.*
+!.env.example

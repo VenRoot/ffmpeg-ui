@@ -1,0 +1,55 @@
+{
+  "name": "ffmpeg-ui",
+  "version": "1.0.0",
+  "description": "A modern, feature-rich FFmpeg GUI wrapper",
+  "main": "./out/main/index.js",
+  "author": "ffmpeg-ui contributors",
+  "license": "GPL-3.0-only",
+  "scripts": {
+    "start": "electron-vite preview",
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "build:linux": "npm run build && electron-builder --linux",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "dependencies": {
+    "@electron-toolkit/utils": "^2.0.1",
+    "lucide-react": "^0.292.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@electron-toolkit/tsconfig": "^1.0.1",
+    "@types/node": "^20.8.10",
+    "@types/react": "^18.2.33",
+    "@types/react-dom": "^18.2.14",
+    "@vitejs/plugin-react": "^4.1.0",
+    "autoprefixer": "^10.4.16",
+    "electron": "^42.4.0",
+    "electron-builder": "^26.15.2",
+    "electron-vite": "^5.0.0",
+    "postcss": "^8.4.31",
+    "tailwindcss": "^3.3.5",
+    "typescript": "^5.2.2",
+    "vite": "^6.0.0"
+  },
+  "build": {
+    "appId": "com.ffmpegui.app",
+    "productName": "FFmpeg UI",
+    "directories": {
+      "output": "release"
+    },
+    "linux": {
+      "target": [
+        { "target": "AppImage", "arch": ["x64"] },
+        { "target": "tar.gz", "arch": ["x64"] }
+      ],
+      "category": "AudioVideo;Video;Multimedia",
+      "description": "A modern, feature-rich FFmpeg GUI wrapper",
+      "desktop": {
+        "StartupNotify": "true"
+      }
+    },
+    "files": ["out/**/*"]
+  }
+}
